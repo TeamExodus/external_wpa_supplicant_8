@@ -518,17 +518,38 @@ static void wpa_supplicant_ctrl_iface_msg_cb(void *ctx, int level,
 				wpa_s,
 				type != WPA_MSG_PER_INTERFACE ?
 				NULL : wpa_s->ifname,
-				priv->sock, &priv->ctrl_dst, level, txt, len,
-				NULL, priv);
+				gpriv->sock, &gpriv->ctrl_dst, level,
+				txt, len, NULL, gpriv);
 		}
 	}
 
-	if (type == WPA_MSG_ONLY_GLOBAL || wpa_s->ctrl_iface == NULL)
-		return;
-	wpa_supplicant_ctrl_iface_send(wpa_s, NULL, wpa_s->ctrl_iface->sock,
-				       &wpa_s->ctrl_iface->ctrl_dst,
-				       level, txt, len, wpa_s->ctrl_iface,
-				       NULL);
+	priv = wpa_s->ctrl_iface;
+
+	if (type != WPA_MSG_ONLY_GLOBAL && priv) {
+		if (!dl_list_empty(&priv->msg_queue) ||
+		    wpas_ctrl_iface_throttle(priv->sock)) {
+			if (priv->throttle_count == 0) {
+				wpa_printf(MSG_MSGDUMP,
+					   "CTRL: Had to throttle event message for sock %d",
+					   priv->sock);
+			}
+			priv->throttle_count++;
+			wpas_ctrl_msg_queue_limit(priv->throttle_count,
+						  &priv->msg_queue);
+			wpas_ctrl_msg_queue(&priv->msg_queue, wpa_s, level,
+					    type, txt, len);
+		} else {
+			if (priv->throttle_count) {
+				wpa_printf(MSG_MSGDUMP,
+					   "CTRL: Had to throttle %u event message(s) for sock %d",
+					   priv->throttle_count, priv->sock);
+			}
+			priv->throttle_count = 0;
+			wpa_supplicant_ctrl_iface_send(wpa_s, NULL, priv->sock,
+						       &priv->ctrl_dst, level,
+						       txt, len, priv, NULL);
+		}
+	}
 }
 
 
