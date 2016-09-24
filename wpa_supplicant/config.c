@@ -1843,6 +1843,8 @@ static const struct parse_data ssid_fields[] = {
 	{ FUNC(auth_alg) },
 	{ FUNC(scan_freq) },
 	{ FUNC(freq_list) },
+	{ INT_RANGE(max_oper_chwidth, VHT_CHANWIDTH_USE_HT,
+		    VHT_CHANWIDTH_80P80MHZ) },
 #ifdef IEEE8021X_EAPOL
 	{ FUNC(eap) },
 	{ STR_LENe(identity) },
@@ -1973,6 +1975,7 @@ static const struct parse_data ssid_fields[] = {
 	{ INT(update_identifier) },
 #endif /* CONFIG_HS20 */
 	{ INT_RANGE(mac_addr, 0, 2) },
+	{ INT_RANGE(pbss, 0, 2) },
 };
 
 #undef OFFSET
@@ -2612,14 +2615,15 @@ char * wpa_config_get(struct wpa_ssid *ssid, const char *var)
 		const struct parse_data *field = &ssid_fields[i];
 		if (os_strcmp(var, field->name) == 0) {
 			char *ret = field->writer(field, ssid);
-			if (ret != NULL && (os_strchr(ret, '\r') != NULL ||
-				os_strchr(ret, '\n') != NULL)) {
+
+			if (ret && has_newline(ret)) {
 				wpa_printf(MSG_ERROR,
-					"Found newline in value for %s; "
-					"not returning it", var);
+					   "Found newline in value for %s; not returning it",
+					   var);
 				os_free(ret);
 				ret = NULL;
 			}
+
 			return ret;
 		}
 	}
